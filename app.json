@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "iOS-MacCursor",
-    "slug": "iOS-MacCursor",
+    "name": "iPhoneMouse",
+    "slug": "iPhoneMouse",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "iosmaccursor",
+    "scheme": "iphonemouse",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
