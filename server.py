@@ -25,10 +25,15 @@ async def handle_connection(websocket):
                 print(f"[{datetime.now().isoformat()}] Moving cursor by dx: {dx}, dy: {dy}")
                 pyautogui.move(dx * SENSITIVITY, -dy * SENSITIVITY)
                 
-            elif action == "click":
+            elif action == "mousedown":
                 button = data.get("button", "left")
-                print(f"[{datetime.now().isoformat()}] Clicking {button}")
-                pyautogui.click(button=button)
+                print(f"[{datetime.now().isoformat()}] Mouse down {button}")
+                pyautogui.mouseDown(button=button)
+                
+            elif action == "mouseup":
+                button = data.get("button", "left")
+                print(f"[{datetime.now().isoformat()}] Mouse up {button}")
+                pyautogui.mouseUp(button=button)
                 
     except websockets.exceptions.ConnectionClosed:
         print("Device disconnected")

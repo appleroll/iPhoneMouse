@@ -7,11 +7,8 @@ export default function App() {
   const [data, setData] = useState({ x: 0, y: 0, z: 0 });
   const [serverIP, setServerIP] = useState(''); // Empty by default
   const [connected, setConnected] = useState(false);
-  const [isCalibrating, setIsCalibrating] = useState(true);
   
   const ws = useRef<WebSocket | null>(null);
-  const velocity = useRef({ x: 0, y: 0 });
-
 
   useEffect(() => {
     connectWebSocket();
@@ -116,10 +113,8 @@ export default function App() {
 
       setData({ x: ax, y: ay, z: 0 });
 
-      // Only send if connected and moving
       if (ws.current?.readyState === WebSocket.OPEN && (Math.abs(ax) > 0 || Math.abs(ay) > 0)) {
         console.log(`[${new Date().toISOString()}] Sending move: ax=${ax.toFixed(2)}, ay=${ay.toFixed(2)}`);
-        // Note: keeping ax, ay keys since user requested "Do not fix anything else except..."
         ws.current.send(JSON.stringify({ action: 'move', dx: ax, dy: ay}));
       }
     });
@@ -127,11 +122,11 @@ export default function App() {
     return () => {
       subscription.remove();
     };
-  }, [isCalibrating]);
+  });
 
-  const handleClick = (button: 'left' | 'right') => {
+  const handleMouseEvent = (action: 'mousedown' | 'mouseup', button: 'left' | 'right') => {
     if (ws.current?.readyState === WebSocket.OPEN) {
-      ws.current.send(JSON.stringify({ action: 'click', button }));
+      ws.current.send(JSON.stringify({ action, button }));
     }
   };
 
@@ -160,20 +155,23 @@ export default function App() {
       </View>
 
       <View style={styles.buttonContainer}>
-        <TouchableOpacity style={styles.button} onPress={() => handleClick('left')}>
+        <TouchableOpacity 
+          style={styles.button} 
+          onPressIn={() => handleMouseEvent('mousedown', 'left')}
+          onPressOut={() => handleMouseEvent('mouseup', 'left')}
+        >
           <Text style={styles.buttonText}>Left Click</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.button} onPress={() => handleClick('right')}>
+        <TouchableOpacity 
+          style={styles.button} 
+          onPressIn={() => handleMouseEvent('mousedown', 'right')}
+          onPressOut={() => handleMouseEvent('mouseup', 'right')}
+        >
           <Text style={styles.buttonText}>Right Click</Text>
         </TouchableOpacity>
       </View>
 
       <View style={styles.arrowContainer}>
-        {isCalibrating ? (
-            <Text style={styles.instructions}>Calibrating resting position...</Text>
-        ) : (
-            <Text style={styles.instructions}>Drag phone on desk to move cursor</Text>
-        )}
         <Text style={styles.debugText}>X: {data.x.toFixed(2)} Y: {data.y.toFixed(2)}</Text>
         
         {/* We use an arrow pointing up, and rotate it based on the DeviceMotion X/Y */}
