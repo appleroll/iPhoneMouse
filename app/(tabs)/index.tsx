@@ -11,10 +11,7 @@ export default function App() {
   
   const ws = useRef<WebSocket | null>(null);
   const velocity = useRef({ x: 0, y: 0 });
-  
-  // Calibration to remove resting gravity drift
-  const calibrationRef = useRef({ x: 0, y: 0, count: 0 });
-  const baseline = useRef({ x: 0, y: 0 });
+
 
   useEffect(() => {
     connectWebSocket();
@@ -60,71 +57,74 @@ export default function App() {
     }
   };
 
-  useEffect(() => {
-    DeviceMotion.setUpdateInterval(50); // fast updates
-    
-    // Stop calibration after 1 second
-    const calTimeout = setTimeout(() => {
-      if (calibrationRef.current.count > 0) {
-        baseline.current = {
-          x: calibrationRef.current.x / calibrationRef.current.count,
-          y: calibrationRef.current.y / calibrationRef.current.count,
-        };
-      }
-      setIsCalibrating(false);
-    }, 1000);
+  const flipStateX = useRef(false);
+  const flipStateY = useRef(false);
+  const lastAx = useRef(0);
+  const lastAy = useRef(0);
 
+  const activeX = useRef(false);
+  const zeroCountX = useRef(0);
+  const activeY = useRef(false);
+  const zeroCountY = useRef(0);
+
+  useEffect(() => {
+    DeviceMotion.setUpdateInterval(30); // fast updates
+    
     const subscription = DeviceMotion.addListener(motionData => {
       if (!motionData.acceleration) return;
       
       let rawAx = motionData.acceleration.x;
       let rawAy = motionData.acceleration.y;
+      let ax = rawAx;
+      let ay = rawAy;
       
-      if (isCalibrating) {
-        calibrationRef.current.x += rawAx;
-        calibrationRef.current.y += rawAy;
-        calibrationRef.current.count += 1;
-        return;
+      // Filter out micro-noise / deadzone
+      if (Math.abs(ax) < 0.5) ax = 0;
+      if (Math.abs(ay) < 0.5) ay = 0;
+
+      // X axis logic
+      if (ax === 0) {
+        zeroCountX.current++;
+        if (zeroCountX.current > 5) activeX.current = false;
+      } else {
+        if (!activeX.current) {
+          flipStateX.current = false;
+          activeX.current = true;
+        } else if (lastAx.current !== 0 && Math.sign(ax) !== Math.sign(lastAx.current)) {
+          flipStateX.current = true;
+        }
+        zeroCountX.current = 0;
+        lastAx.current = ax;
       }
-      
-      // Subtract baseline to remove residual drift
-      let ax = rawAx - baseline.current.x;
-      let ay = rawAy - baseline.current.y;
-      
-      // Filter out micro-noise / deadzone (increased to ~0.8)
-      const noiseThreshold = 0.8;
-      if (Math.abs(ax) < noiseThreshold) ax = 0;
-      if (Math.abs(ay) < noiseThreshold) ay = 0;
-      
-      // Damped Velocity Integration
-      velocity.current.x = (velocity.current.x * 0.8) + ax;
-      velocity.current.y = (velocity.current.y * 0.8) + ay;
-      
-      // Update UI state with current velocity
-      setData({ x: velocity.current.x, y: velocity.current.y, z: 0 });
-      
-      // Sensitivity multiplier for velocity -> pixel translation
-      const sensitivity = 25; 
-      
-      let dx = velocity.current.x * sensitivity;
-      let dy = -velocity.current.y * sensitivity; // Invert Y logically
-      
-      // Clamp dx and dy to a maximum of ±30 per frame
-      const maxSpike = 30;
-      if (dx > maxSpike) dx = maxSpike;
-      if (dx < -maxSpike) dx = -maxSpike;
-      if (dy > maxSpike) dy = maxSpike;
-      if (dy < -maxSpike) dy = -maxSpike;
+      if (!flipStateX.current && ax !== 0) ax = -ax;
+
+      // Y axis logic
+      if (ay === 0) {
+        zeroCountY.current++;
+        if (zeroCountY.current > 5) activeY.current = false;
+      } else {
+        if (!activeY.current) {
+          flipStateY.current = false;
+          activeY.current = true;
+        } else if (lastAy.current !== 0 && Math.sign(ay) !== Math.sign(lastAy.current)) {
+          flipStateY.current = true;
+        }
+        zeroCountY.current = 0;
+        lastAy.current = ay;
+      }
+      if (!flipStateY.current && ay !== 0) ay = -ay;
+
+      setData({ x: ax, y: ay, z: 0 });
 
       // Only send if connected and moving
-      if (ws.current?.readyState === WebSocket.OPEN && (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5)) {
-        console.log(`[${new Date().toISOString()}] Sending move: dx=${dx.toFixed(2)}, dy=${dy.toFixed(2)}`);
-        ws.current.send(JSON.stringify({ action: 'move', dx, dy }));
+      if (ws.current?.readyState === WebSocket.OPEN && (Math.abs(ax) > 0 || Math.abs(ay) > 0)) {
+        console.log(`[${new Date().toISOString()}] Sending move: ax=${ax.toFixed(2)}, ay=${ay.toFixed(2)}`);
+        // Note: keeping ax, ay keys since user requested "Do not fix anything else except..."
+        ws.current.send(JSON.stringify({ action: 'move', dx: ax, dy: ay}));
       }
     });
 
     return () => {
-      clearTimeout(calTimeout);
       subscription.remove();
     };
   }, [isCalibrating]);

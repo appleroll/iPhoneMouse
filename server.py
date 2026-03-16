@@ -3,12 +3,15 @@ import json
 import pyautogui
 import websockets
 from datetime import datetime
+import time
 
 # Disable failsafe to allow mouse to go to the very edge of the screen
 pyautogui.FAILSAFE = False
+SENSITIVITY = 25
 
 async def handle_connection(websocket):
     print("Device connected")
+    
     try:
         async for message in websocket:
             data = json.loads(message)
@@ -18,20 +21,13 @@ async def handle_connection(websocket):
                 dx = data.get("dx", 0)
                 dy = data.get("dy", 0)
                 
-                # Double clamp safety net on server side capping at max 30 per frame
-                if dx > 30: dx = 30
-                if dx < -30: dx = -30
-                if dy > 30: dy = 30
-                if dy < -30: dy = -30
-                
                 # Apply the movement relatively
                 print(f"[{datetime.now().isoformat()}] Moving cursor by dx: {dx}, dy: {dy}")
-                pyautogui.move(dx, dy)
+                pyautogui.move(dx * SENSITIVITY, -dy * SENSITIVITY)
                 
             elif action == "click":
                 button = data.get("button", "left")
                 print(f"[{datetime.now().isoformat()}] Clicking {button}")
-                # Sometimes macOS ignores standard click(), explicit mouseDown and mouseUp is safer
                 pyautogui.click(button=button)
                 
     except websockets.exceptions.ConnectionClosed:
